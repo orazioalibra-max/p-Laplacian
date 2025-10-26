@@ -1,0 +1,56 @@
+// p-Laplace problem on the circle, p>=2, Rayleigh-Ritz, with preconditioner
+// Lecture notes, 11.3
+int nint = 50;
+int ninner = 30;
+real coeff = 1;
+real p = 3;
+if (p > pEnd) p = pEnd;
+real pOld = 2.0; // greatest p with convergence
+real r = 1.0;
+border Gamma (t=0,2*pi) { x = r * cos(t); y = r * sin(t); label = 1; }
+border Inner (t=0,2*pi) { x = 0.1*r * cos(t); y = 0.1*r * sin(t); label = 2; }
+mesh Th = buildmesh(Gamma(nint) + Inner(ninner));
+fespace Vh(Th,P1);
+Vh u0,u,uOld,v;
+func f = 1.0;
+func uexact = (pEnd-1)/pEnd*(0.5)^(1/(pEnd-1))*(1-(x^2+y^2)^(pEnd/(2*pEnd-2)));
+real Juexact = 2*pi*(0.5^(pEnd/(pEnd-1.0))*(pEnd-1)/(3*pEnd-2.0)/pEnd-
+                      (pEnd-1)/pEnd*0.5^(1.0/(pEnd-1))*(0.5-(pEnd-1)/(3*pEnd-2)));
+
+func real J(real[int] & ucoeff)
+{
+  Vh uloc;
+  uloc[] = ucoeff;
+  return int2d(Th)((dx(uloc)^2+dy(uloc)^2)^(pEnd/2)/pEnd-f*uloc);
+}
+
+func real[int] nablaJR(real[int] & ucoeff)
+// gradient of JR applied to each phi function
+{
+  Vh uloc;
+  uloc[] = ucoeff;
+  varf F(unused,phi) = int2d(Th)((dx(uloc)^2+dy(uloc)^2)^((p-2)/2)*
+                                 (dx(uloc)*dx(phi)+dy(uloc)*dy(phi))-f*phi)
+    +on(1,unused=0); // it takes value 0 at points on the boundaries, so that
+                     // x_{m-1}+alpha d_{m-1} does not change values
+  real[int] r = F(0,Vh);
+  return r;
+}
+
+
+// initial solution given by Poisson (p=2)
+solve Poisson(u0,v) = int2d(Th)((dx(u0)*dx(v)+dy(u0)*dy(v)))-int2d(Th)(f*v)
+  +on(1,u0=0);
+// u0 is the solution of Poisson's problem
+// we compute the corresponding matrix and factorize once and for all
+// one preconditioner
+u = u0;
+
+varf HtildeJR(w,v) = int2d(Th)((dx(u)^2+dy(u)^2)^((p-2)/2)*
+                               (dx(w)*dx(v)+dy(w)*dy(v)))
+  +on(1,w=0); // think to p=2...
+/* varf HtildeJR(w,v,p) = int2d(Th)((dx(u)^2+dy(u)^2)^((p-2)/2)*
+                               (dx(w)*dx(v)+dy(w)*dy(v)))
+  +on(1,w=0); // think to p=2... */
+
+include "pLaplacian_V2.edp";

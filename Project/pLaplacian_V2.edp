@@ -1,0 +1,83 @@
+real s0=clock();
+matrix H;
+func real[int] applyprec(real[int] & vec)
+{
+  real[int] r = H^(-1)*vec; //no inversion, use the method above
+  return r;
+}
+int conv = 0;
+int stopConv=0; // Convergence from stop function check
+int gradFail = 0; // Early stop from stop function check
+int err=0; // NLCG runtime error
+int iterCounter = 0; // counts the total number of iterations
+int lastIter = 0;  // counts the number of iterations from last NLCG call
+
+
+func real epsScale(real p, real pEnd) {
+  return 1e-10^((p/pEnd + 1.0)/2);
+}
+
+func bool StopFunc(int Iter, real[int] U, real[int] g)
+{
+  iterCounter += 1;
+  lastIter = Iter;
+  // if (g'*g > 1e9) {
+  //   stopConv = false;
+  //   gradFail = true;
+  //   return true;
+  // }
+  if (g'*g < epsScale(p, pEnd)){
+    stopConv = true;
+    return true;
+  }
+  return false;
+}
+
+uOld = u;
+for(int i = 0; i < 1000; i++){
+  try {
+    H = HtildeJR(Vh,Vh,solver=Cholesky,factorize=1);
+    for(int j = 0; j < 7; j++){
+      conv = NLCG(nablaJR, u[], nbiter=34, precon=applyprec, eps=-1e-8, stop=StopFunc);
+      conv = (conv || stopConv) && !gradFail;
+      if (conv || gradFail) break;
+      H = HtildeJR(Vh,Vh,solver=Cholesky,factorize=1);
+    }
+    err = 0;
+  } catch (...) {
+    conv = 0;
+    err = 1;
+  }
+  if (err) coeff *= 0.7;
+  cout << lastIter << ";" << coeff << endl;
+  if (conv) {
+    stopConv = false;
+    if (p < pEnd) {
+      pOld = p;
+      p *= (1 + coeff);
+      if (p > pEnd) {
+        p = pEnd; // ensure we do not exceed the maximum p
+      }
+      cout << "Increasing p to " << p << endl;
+      uOld = u;
+    } else {
+      cout << "Converged with p = " << p << endl;
+      break; // exit if we reached the maximum p
+    }
+  } else {
+    p = (p + pOld)/2;
+    u = uOld;
+    gradFail = false;
+    cout << "Decreasing p to " << p << endl;
+  }
+}
+real cputime = clock()-s0;
+real L2err = sqrt(int2d(Th)((uexact-u)^2));
+real Jerr = abs(J(u[])-Juexact);
+cout << "************************************************" << endl;
+cout << "nablaJR(u[])'HtildeJR(nablaJR(u[])): " << nablaJR(u[])'*applyprec(nablaJR(u[])) << endl;
+cout << "L2 error:                            " << L2err << endl;
+cout << "J error:                             " << Jerr << endl;
+cout << "Total iterations                     " << iterCounter << endl;
+cout << "Final coeff                          " << coeff << endl;
+Vh uplot = uexact;
